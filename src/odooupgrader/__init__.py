@@ -1,5 +1,5 @@
 """
-OdooUpgrade - Professional Odoo database upgrade tool
+OdooUpgrader - Professional Odoo database upgrade tool
 """
 
 __version__ = "0.1.0"

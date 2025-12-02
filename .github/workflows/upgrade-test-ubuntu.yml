@@ -74,7 +74,7 @@ jobs:
 
       - name: Run Upgrade (14.0 -> ${{ matrix.scenario.target }})
         run: |
-          odooupgrade \
+          odooupgrader \
             --source "${{ steps.prep.outputs.source_arg }}" \
             --version "${{ matrix.scenario.target }}" \
             --verbose

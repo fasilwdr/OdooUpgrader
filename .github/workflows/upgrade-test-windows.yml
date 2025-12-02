@@ -35,4 +35,4 @@ jobs:
         shell: pwsh
         run: |
           # This proves the executable was created and library paths are correct
-          odooupgrade --help
+          odooupgrader --help

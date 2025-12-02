@@ -29,7 +29,7 @@ Professional command-line tool for automating Odoo database upgrades using [OCA'
 ### Using pip (Recommended)
 
 ```bash
-pip install odooupgrade
+pip install odooupgrader
 ```
 
 ### From Source
@@ -47,31 +47,31 @@ pip install -e .
 Upgrade a local database file to version 16.0:
 
 ```bash
-odooupgrade --source /path/to/database.zip --version 16.0
+odooupgrader --source /path/to/database.zip --version 16.0
 ```
 
 ### Download and Upgrade from URL
 
 ```bash
-odooupgrade --source https://example.com/database.dump --version 17.0
+odooupgrader --source https://example.com/database.dump --version 17.0
 ```
 
 ### Specify PostgreSQL Version
 
 ```bash
-odooupgrade --source /path/to/database.zip --version 16.0 --postgres-version 15
+odooupgrader --source /path/to/database.zip --version 16.0 --postgres-version 15
 ```
 
 ### Enable Verbose Logging
 
 ```bash
-odooupgrade --source /path/to/database.zip --version 18.0 --verbose
+odooupgrader --source /path/to/database.zip --version 18.0 --verbose
 ```
 
 ### Save Logs to File
 
 ```bash
-odooupgrade --source /path/to/database.zip --version 15.0 --log-file upgrade.log
+odooupgrader --source /path/to/database.zip --version 15.0 --log-file upgrade.log
 ```
 
 ## 🎯 Command-Line Options

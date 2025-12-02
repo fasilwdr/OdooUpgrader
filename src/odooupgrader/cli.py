@@ -49,7 +49,7 @@ def main(source, version, verbose, postgres_version, log_file):
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
-        logging.getLogger("odooupgrade").addHandler(file_handler)
+        logging.getLogger("odooupgrader").addHandler(file_handler)
 
     upgrader = OdooUpgrader(
         source=source,

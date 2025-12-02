@@ -3,7 +3,7 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "odooupgrade"
+name = "odooupgrader"
 version = "0.1.0"
 description = "Docker-based Odoo database migration tool using OpenUpgrade framework"
 authors = [{name = "Fasil", email = "fasilwdr@hotmail.com"}]
@@ -38,13 +38,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fasilwdr/OdooUpgrade"
-Repository = "https://github.com/fasilwdr/OdooUpgrade"
-Documentation = "https://github.com/fasilwdr/OdooUpgrade#readme"
-Issues = "https://github.com/fasilwdr/OdooUpgrade/issues"
+Homepage = "https://github.com/fasilwdr/OdooUpgrader"
+Repository = "https://github.com/fasilwdr/OdooUpgrader"
+Documentation = "https://github.com/fasilwdr/OdooUpgrader#readme"
+Issues = "https://github.com/fasilwdr/OdooUpgrader/issues"
 
 [project.scripts]
-odooupgrade = "odooupgrade.cli:main"
+odooupgrader = "odooupgrader.cli:main"
 
 [tool.black]
 line-length = 100
