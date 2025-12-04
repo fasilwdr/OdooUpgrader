@@ -84,7 +84,7 @@ class OdooUpgrader:
 
         if self.source.startswith("http://") or self.source.startswith("https://"):
             try:
-                with requests.get(self.source, stream=True, timeout=15) as response:
+                with requests.get(self.source, stream=True, timeout=30) as response:
                     response.raise_for_status()
                 console.print("[green]Source URL is accessible.[/green]")
             except requests.RequestException as e:
@@ -102,7 +102,7 @@ class OdooUpgrader:
             console.print("[blue]Validating extra addons...[/blue]")
             if self.extra_addons.startswith("http://") or self.extra_addons.startswith("https://"):
                 try:
-                    with requests.head(self.extra_addons, timeout=15, allow_redirects=True) as response:
+                    with requests.head(self.extra_addons, timeout=30, allow_redirects=True) as response:
                         if response.status_code >= 400:
                             raise requests.RequestException("Status code error")
                 except requests.RequestException:
@@ -140,7 +140,8 @@ class OdooUpgrader:
         """Generic download helper."""
         logger.info(f"Downloading {url} to {dest_path}")
         try:
-            with requests.get(url, stream=True) as response:
+            # Added timeout to prevent hanging
+            with requests.get(url, stream=True, timeout=60) as response:
                 response.raise_for_status()
                 total_size = int(response.headers.get("Content-Length", 0))
 
@@ -209,8 +210,8 @@ class OdooUpgrader:
                 console.print(f"[bold red]Error:[/bold red] Failed to copy local addons: {e}")
                 sys.exit(1)
 
-        # Handle directory nesting (common in GitHub downloads)
-        items = os.listdir(self.custom_addons_dir)
+        # Handle directory nesting (common in GitHub downloads), ignoring hidden files
+        items = [i for i in os.listdir(self.custom_addons_dir) if not i.startswith('.')]
         if len(items) == 1:
             single_item_path = os.path.join(self.custom_addons_dir, items[0])
             if os.path.isdir(single_item_path):
