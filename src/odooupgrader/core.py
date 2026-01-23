@@ -10,40 +10,65 @@ from typing import Optional, List
 import requests
 from packaging import version
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeElapsedColumn,
+)
 
 console = Console()
 logger = logging.getLogger("odooupgrader")
 
 
 class OdooUpgrader:
-    VALID_VERSIONS = ["10.0", "11.0", "12.0", "13.0", "14.0", "15.0", "16.0", "17.0", "18.0"]
+    VALID_VERSIONS = [
+        "10.0",
+        "11.0",
+        "12.0",
+        "13.0",
+        "14.0",
+        "15.0",
+        "16.0",
+        "17.0",
+        "18.0",
+    ]
 
-    def __init__(self, source: str, target_version: str, extra_addons: Optional[str] = None, verbose: bool = False,
-                 postgres_version: str = "13"):
+    def __init__(
+        self,
+        source: str,
+        target_version: str,
+        extra_addons: Optional[str] = None,
+        upgrade_scripts: Optional[str] = None,
+        verbose: bool = False,
+        postgres_version: str = "13",
+    ):
         self.source = source
         self.target_version = target_version
         self.extra_addons = extra_addons
+        self.upgrade_scripts = upgrade_scripts
         self.verbose = verbose
         self.postgres_version = postgres_version
         self.cwd = os.getcwd()
-        self.source_dir = os.path.join(self.cwd, 'source')
-        self.output_dir = os.path.join(self.cwd, 'output')
-        self.filestore_dir = os.path.join(self.output_dir, 'filestore')
-        self.custom_addons_dir = os.path.join(self.output_dir, 'custom_addons')
+        self.source_dir = os.path.join(self.cwd, "source")
+        self.output_dir = os.path.join(self.cwd, "output")
+        self.filestore_dir = os.path.join(self.output_dir, "filestore")
+        self.custom_addons_dir = os.path.join(self.output_dir, "custom_addons")
+        self.custom_upgrade_scripts_dir = os.path.join(self.output_dir, "custom_upgrade_scripts")
         self.compose_cmd = self._get_docker_compose_cmd()
 
-    def _run_cmd(self, cmd: List[str], check: bool = True, capture_output: bool = False) -> subprocess.CompletedProcess:
+    def _run_cmd(
+        self, cmd: List[str], check: bool = True, capture_output: bool = False
+    ) -> subprocess.CompletedProcess:
         """Executes a subprocess command and logs it."""
         cmd_str = " ".join(cmd)
         logger.debug(f"Executing: {cmd_str}")
 
         try:
             result = subprocess.run(
-                cmd,
-                check=check,
-                text=True,
-                capture_output=capture_output
+                cmd, check=check, text=True, capture_output=capture_output
             )
             if capture_output and result.stdout:
                 logger.debug(f"Command Output: {result.stdout.strip()}")
@@ -57,11 +82,15 @@ class OdooUpgrader:
     def _get_docker_compose_cmd(self) -> List[str]:
         """Determines if 'docker compose' or 'docker-compose' is available."""
         try:
-            subprocess.run(["docker", "compose", "version"], check=True, capture_output=True)
+            subprocess.run(
+                ["docker", "compose", "version"], check=True, capture_output=True
+            )
             return ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
             try:
-                subprocess.run(["docker-compose", "--version"], check=True, capture_output=True)
+                subprocess.run(
+                    ["docker-compose", "--version"], check=True, capture_output=True
+                )
                 return ["docker-compose"]
             except (subprocess.CalledProcessError, FileNotFoundError):
                 return ["docker", "compose"]
@@ -88,12 +117,16 @@ class OdooUpgrader:
                     response.raise_for_status()
                 console.print("[green]Source URL is accessible.[/green]")
             except requests.RequestException as e:
-                console.print(f"[bold red]Error:[/bold red] Source URL is not accessible: {e}")
+                console.print(
+                    f"[bold red]Error:[/bold red] Source URL is not accessible: {e}"
+                )
                 logger.error(f"Source URL invalid: {e}")
                 sys.exit(1)
         else:
             if not os.path.exists(self.source):
-                console.print(f"[bold red]Error:[/bold red] Source file not found: {self.source}")
+                console.print(
+                    f"[bold red]Error:[/bold red] Source file not found: {self.source}"
+                )
                 logger.error(f"Source file not found: {self.source}")
                 sys.exit(1)
             console.print("[green]Source file exists.[/green]")
@@ -101,24 +134,50 @@ class OdooUpgrader:
         if self.extra_addons:
             console.print("[blue]Validating extra addons...[/blue]")
             if "://" in self.extra_addons:
-                if not (self.extra_addons.startswith("http://") or self.extra_addons.startswith("https://")):
+                if not (
+                    self.extra_addons.startswith("http://")
+                    or self.extra_addons.startswith("https://")
+                ):
                     console.print(
-                        f"[bold red]Error:[/bold red] Invalid protocol for addons URL. Only http/https supported.")
+                        "[bold red]Error:[/bold red] Invalid protocol for addons URL. Only http/https supported."
+                    )
                     sys.exit(1)
 
                 try:
-                    with requests.head(self.extra_addons, timeout=30, allow_redirects=True) as response:
+                    with requests.head(
+                        self.extra_addons, timeout=30, allow_redirects=True
+                    ) as response:
                         if response.status_code >= 400:
                             raise requests.RequestException("Status code error")
                 except requests.RequestException:
-                    console.print(f"[bold red]Error:[/bold red] Extra addons URL is not accessible.")
+                    console.print(
+                        "[bold red]Error:[/bold red] Extra addons URL is not accessible."
+                    )
                     logger.error("Extra addons URL invalid")
                     sys.exit(1)
             else:
                 if not os.path.exists(self.extra_addons):
-                    console.print(f"[bold red]Error:[/bold red] Extra addons path not found: {self.extra_addons}")
+                    console.print(
+                        f"[bold red]Error:[/bold red] Extra addons path not found: {self.extra_addons}"
+                    )
                     logger.error(f"Extra addons path not found: {self.extra_addons}")
                     sys.exit(1)
+
+        if self.upgrade_scripts:
+            console.print("[blue]Validating upgrade scripts...[/blue]")
+            if not os.path.exists(self.upgrade_scripts):
+                console.print(
+                    f"[bold red]Error:[/bold red] Upgrade scripts path not found: {self.upgrade_scripts}"
+                )
+                logger.error(f"Upgrade scripts path not found: {self.upgrade_scripts}")
+                sys.exit(1)
+            if not os.path.isdir(self.upgrade_scripts):
+                console.print(
+                    f"[bold red]Error:[/bold red] Upgrade scripts path must be a directory: {self.upgrade_scripts}"
+                )
+                logger.error(f"Upgrade scripts path is not a directory: {self.upgrade_scripts}")
+                sys.exit(1)
+            console.print("[green]Upgrade scripts path exists.[/green]")
 
     def prepare_environment(self):
         """Creates necessary directories and cleans old data."""
@@ -129,6 +188,7 @@ class OdooUpgrader:
         os.makedirs(self.source_dir, exist_ok=True)
         os.makedirs(self.filestore_dir, exist_ok=True)
         os.makedirs(self.custom_addons_dir, exist_ok=True)
+        os.makedirs(self.custom_upgrade_scripts_dir, exist_ok=True)
 
         if sys.platform != "win32":
             try:
@@ -141,7 +201,9 @@ class OdooUpgrader:
             except Exception as e:
                 logger.warning(f"Could not set broad permissions on output dir: {e}")
 
-    def download_file(self, url: str, dest_path: str, description: str = "Downloading..."):
+    def download_file(
+        self, url: str, dest_path: str, description: str = "Downloading..."
+    ):
         """Generic download helper."""
         logger.info(f"Downloading {url} to {dest_path}")
         try:
@@ -150,13 +212,13 @@ class OdooUpgrader:
                 total_size = int(response.headers.get("Content-Length", 0))
 
                 with Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        BarColumn(),
-                        TaskProgressColumn(),
-                        "•",
-                        TimeElapsedColumn(),
-                        console=console
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    "•",
+                    TimeElapsedColumn(),
+                    console=console,
                 ) as progress:
                     task = progress.add_task(f"[cyan]{description}", total=total_size)
                     with open(dest_path, "wb") as f:
@@ -172,7 +234,9 @@ class OdooUpgrader:
         """Downloads file from URL using Requests with Rich progress bar."""
         target_path = ""
         if self.source.startswith("http://") or self.source.startswith("https://"):
-            filename = os.path.basename(self.source.split("?")[0]) or "downloaded_db.dump"
+            filename = (
+                os.path.basename(self.source.split("?")[0]) or "downloaded_db.dump"
+            )
             target_path = os.path.join(self.cwd, filename)
             self.download_file(self.source, target_path, "Downloading source DB...")
         else:
@@ -187,43 +251,61 @@ class OdooUpgrader:
         console.print("[blue]Processing custom addons...[/blue]")
         logger.info("Processing custom addons...")
 
-        if self.extra_addons.startswith("http://") or self.extra_addons.startswith("https://"):
+        if self.extra_addons.startswith("http://") or self.extra_addons.startswith(
+            "https://"
+        ):
             zip_path = os.path.join(self.source_dir, "addons.zip")
-            self.download_file(self.extra_addons, zip_path, "Downloading extra addons...")
+            self.download_file(
+                self.extra_addons, zip_path, "Downloading extra addons..."
+            )
             try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     zip_ref.extractall(self.custom_addons_dir)
                 os.remove(zip_path)
             except zipfile.BadZipFile:
-                console.print("[bold red]Error:[/bold red] Downloaded addons file is not a valid zip.")
+                console.print(
+                    "[bold red]Error:[/bold red] Downloaded addons file is not a valid zip."
+                )
                 logger.error("Invalid addons zip file")
                 sys.exit(1)
 
-        elif os.path.isfile(self.extra_addons) and self.extra_addons.lower().endswith('.zip'):
+        elif os.path.isfile(self.extra_addons) and self.extra_addons.lower().endswith(
+            ".zip"
+        ):
             try:
-                with zipfile.ZipFile(self.extra_addons, 'r') as zip_ref:
+                with zipfile.ZipFile(self.extra_addons, "r") as zip_ref:
                     zip_ref.extractall(self.custom_addons_dir)
             except zipfile.BadZipFile:
-                console.print("[bold red]Error:[/bold red] Addons file is not a valid zip.")
+                console.print(
+                    "[bold red]Error:[/bold red] Addons file is not a valid zip."
+                )
                 sys.exit(1)
 
         elif os.path.isdir(self.extra_addons):
             try:
-                shutil.copytree(self.extra_addons, self.custom_addons_dir, dirs_exist_ok=True)
+                shutil.copytree(
+                    self.extra_addons, self.custom_addons_dir, dirs_exist_ok=True
+                )
             except Exception as e:
-                console.print(f"[bold red]Error:[/bold red] Failed to copy local addons: {e}")
+                console.print(
+                    f"[bold red]Error:[/bold red] Failed to copy local addons: {e}"
+                )
                 sys.exit(1)
 
         # Handle directory nesting (common in GitHub downloads), ignoring hidden files
-        items = [i for i in os.listdir(self.custom_addons_dir) if not i.startswith('.')]
+        items = [i for i in os.listdir(self.custom_addons_dir) if not i.startswith(".")]
         if len(items) == 1:
             single_item_path = os.path.join(self.custom_addons_dir, items[0])
             if os.path.isdir(single_item_path):
                 sub_items = os.listdir(single_item_path)
-                is_module = any(x in sub_items for x in ['__manifest__.py', '__openerp__.py'])
+                is_module = any(
+                    x in sub_items for x in ["__manifest__.py", "__openerp__.py"]
+                )
 
                 if not is_module:
-                    logger.info(f"Detected wrapper directory '{items[0]}'. Flattening structure...")
+                    logger.info(
+                        f"Detected wrapper directory '{items[0]}'. Flattening structure..."
+                    )
                     for sub in sub_items:
                         src_sub = os.path.join(single_item_path, sub)
                         dst_sub = os.path.join(self.custom_addons_dir, sub)
@@ -236,7 +318,7 @@ class OdooUpgrader:
 
         # Check for flat structure (single module at root)
         items = os.listdir(self.custom_addons_dir)
-        has_manifest = any(x in items for x in ['__manifest__.py', '__openerp__.py'])
+        has_manifest = any(x in items for x in ["__manifest__.py", "__openerp__.py"])
 
         if has_manifest:
             logger.info("Detected flat addon structure. Reorganizing...")
@@ -268,7 +350,7 @@ class OdooUpgrader:
                     pass
             for f in files:
                 try:
-                    if f.endswith('.sh'):
+                    if f.endswith(".sh"):
                         os.chmod(os.path.join(root, f), 0o755)
                     else:
                         os.chmod(os.path.join(root, f), 0o644)
@@ -276,6 +358,46 @@ class OdooUpgrader:
                     pass
 
         console.print("[green]Custom addons prepared.[/green]")
+
+    def process_upgrade_scripts(self):
+        """Copies custom upgrade scripts to output/custom_upgrade_scripts."""
+        if not self.upgrade_scripts:
+            return
+
+        console.print("[blue]Processing custom upgrade scripts...[/blue]")
+        logger.info("Processing custom upgrade scripts...")
+
+        try:
+            shutil.copytree(
+                self.upgrade_scripts, self.custom_upgrade_scripts_dir, dirs_exist_ok=True
+            )
+            logger.info(f"Copied upgrade scripts from {self.upgrade_scripts}")
+        except Exception as e:
+            console.print(
+                f"[bold red]Error:[/bold red] Failed to copy upgrade scripts: {e}"
+            )
+            logger.error(f"Failed to copy upgrade scripts: {e}")
+            sys.exit(1)
+
+        # Set permissions for Docker compatibility
+        if sys.platform != "win32":
+            logger.info("Setting permissions on upgrade scripts...")
+            for root, dirs, files in os.walk(self.custom_upgrade_scripts_dir):
+                for d in dirs:
+                    try:
+                        os.chmod(os.path.join(root, d), 0o755)
+                    except Exception:
+                        pass
+                for f in files:
+                    try:
+                        if f.endswith(".py") or f.endswith(".sh"):
+                            os.chmod(os.path.join(root, f), 0o755)
+                        else:
+                            os.chmod(os.path.join(root, f), 0o644)
+                    except Exception:
+                        pass
+
+        console.print("[green]Custom upgrade scripts prepared.[/green]")
 
     def _get_custom_module_names(self) -> str:
         """Scans the custom_addons_dir for valid Odoo modules and returns a comma-separated string."""
@@ -286,8 +408,9 @@ class OdooUpgrader:
         for item in os.listdir(self.custom_addons_dir):
             item_path = os.path.join(self.custom_addons_dir, item)
             if os.path.isdir(item_path):
-                if (os.path.exists(os.path.join(item_path, '__manifest__.py')) or
-                        os.path.exists(os.path.join(item_path, '__openerp__.py'))):
+                if os.path.exists(
+                    os.path.join(item_path, "__manifest__.py")
+                ) or os.path.exists(os.path.join(item_path, "__openerp__.py")):
                     modules.append(item)
 
         if modules:
@@ -298,10 +421,10 @@ class OdooUpgrader:
         """Extracts ZIP or prepares DUMP file."""
         ext = os.path.splitext(filepath)[1].lower()
 
-        if ext == '.zip':
+        if ext == ".zip":
             console.print("[blue]Extracting ZIP file...[/blue]")
             logger.info("Extracting ZIP file...")
-            with zipfile.ZipFile(filepath, 'r') as zip_ref:
+            with zipfile.ZipFile(filepath, "r") as zip_ref:
                 zip_ref.extractall(self.source_dir)
             return "ZIP"
         else:
@@ -335,18 +458,32 @@ networks:
 volumes:
   postgres_data:
 """
-        with open("db-composer.yml", "w", newline='\n') as f:
+        with open("db-composer.yml", "w", newline="\n") as f:
             f.write(content.strip())
 
     def wait_for_db(self):
         """Waits until Postgres is ready."""
         console.print("[yellow]Waiting for database to be ready...[/yellow]")
         max_retries = 30
-        cmd = ["docker", "exec", "db-odooupgrade", "pg_isready", "-U", "odoo", "-d", "odoo"]
+        cmd = [
+            "docker",
+            "exec",
+            "db-odooupgrade",
+            "pg_isready",
+            "-U",
+            "odoo",
+            "-d",
+            "odoo",
+        ]
 
         for _ in range(max_retries):
             try:
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
                 console.print("[green]Database is ready.[/green]")
                 return
             except subprocess.CalledProcessError:
@@ -360,12 +497,17 @@ volumes:
         console.print("[blue]Restoring database...[/blue]")
         logger.info("Restoring database...")
 
-        self._run_cmd(["docker", "exec", "db-odooupgrade", "createdb", "-U", "odoo", "database"], check=False)
+        self._run_cmd(
+            ["docker", "exec", "db-odooupgrade", "createdb", "-U", "odoo", "database"],
+            check=False,
+        )
 
         if file_type == "ZIP":
             dump_path = os.path.join(self.source_dir, "dump.sql")
             if not os.path.exists(dump_path):
-                found_sql = [f for f in os.listdir(self.source_dir) if f.endswith('.sql')]
+                found_sql = [
+                    f for f in os.listdir(self.source_dir) if f.endswith(".sql")
+                ]
                 if found_sql:
                     dump_path = os.path.join(self.source_dir, found_sql[0])
                 else:
@@ -375,7 +517,9 @@ volumes:
             src_filestore = os.path.join(self.source_dir, "filestore")
             if os.path.exists(src_filestore):
                 try:
-                    shutil.copytree(src_filestore, self.filestore_dir, dirs_exist_ok=True)
+                    shutil.copytree(
+                        src_filestore, self.filestore_dir, dirs_exist_ok=True
+                    )
                     if sys.platform != "win32":
                         try:
                             os.chmod(self.filestore_dir, 0o777)
@@ -390,19 +534,40 @@ volumes:
                     logger.warning(f"Failed to copy filestore: {e}")
 
             self._run_cmd(["docker", "cp", dump_path, "db-odooupgrade:/tmp/dump.sql"])
-            self._run_cmd(["docker", "exec", "-i", "db-odooupgrade", "psql", "-U", "odoo", "-d", "database", "-f",
-                           "/tmp/dump.sql"], capture_output=True)
+            self._run_cmd(
+                [
+                    "docker",
+                    "exec",
+                    "-i",
+                    "db-odooupgrade",
+                    "psql",
+                    "-U",
+                    "odoo",
+                    "-d",
+                    "database",
+                    "-f",
+                    "/tmp/dump.sql",
+                ],
+                capture_output=True,
+            )
 
         elif file_type == "DUMP":
             dump_path = os.path.join(self.source_dir, "database.dump")
-            self._run_cmd(["docker", "cp", dump_path, "db-odooupgrade:/tmp/database.dump"])
+            self._run_cmd(
+                ["docker", "cp", dump_path, "db-odooupgrade:/tmp/database.dump"]
+            )
 
             cmd = [
-                "docker", "exec", "db-odooupgrade", "pg_restore",
-                "-U", "odoo", "-d", "database",
-                "--no-owner", "--no-privileges", "--clean", "--if-exists",
-                "--disable-triggers", "--single-transaction",
-                "/tmp/database.dump"
+                "docker",
+                "exec",
+                "db-odooupgrade",
+                "psql",
+                "-U",
+                "odoo",
+                "-d",
+                "database",
+                "-f",
+                "/tmp/database.dump",
             ]
             self._run_cmd(cmd, check=False)
 
@@ -411,12 +576,25 @@ volumes:
         queries = [
             "SELECT latest_version FROM ir_module_module WHERE name = 'base' AND state = 'installed';",
             "SELECT value FROM ir_config_parameter WHERE key = 'database.latest_version';",
-            "SELECT latest_version FROM ir_module_module WHERE name = 'base' ORDER BY id DESC LIMIT 1;"
+            "SELECT latest_version FROM ir_module_module WHERE name = 'base' ORDER BY id DESC LIMIT 1;",
         ]
 
         for q in queries:
-            cmd = ["docker", "exec", "-i", "db-odooupgrade", "psql", "-U", "odoo", "-d", "database", "-t", "-A", "-c",
-                   q]
+            cmd = [
+                "docker",
+                "exec",
+                "-i",
+                "db-odooupgrade",
+                "psql",
+                "-U",
+                "odoo",
+                "-d",
+                "database",
+                "-t",
+                "-A",
+                "-c",
+                q,
+            ]
             try:
                 res = self._run_cmd(cmd, check=False, capture_output=True)
                 ver = res.stdout.strip()
@@ -437,7 +615,7 @@ volumes:
     def generate_next_version(self, current: str) -> str:
         """Calculates next major version (e.g. 15.0 -> 16.0)."""
         try:
-            major = int(current.split('.')[0])
+            major = int(current.split(".")[0])
             return f"{major + 1}.0"
         except Exception:
             v = version.parse(current)
@@ -447,15 +625,26 @@ volumes:
         """Builds and runs the OpenUpgrade container."""
         logger.info(f"Preparing upgrade step to version {target_version}")
 
-        is_final_step = (target_version == self.target_version)
+        is_final_step = target_version == self.target_version
 
         extra_addons_cmds = ""
         extra_addons_path_arg = ""
         custom_modules_load = ""
+        upgrade_path = "/mnt/extra-addons/openupgrade_scripts/scripts"
+        custom_scripts_volume = ""
+
+        if self.upgrade_scripts and os.path.exists(self.custom_upgrade_scripts_dir):
+            items = os.listdir(self.custom_upgrade_scripts_dir)
+            if items:
+                logger.info("Custom upgrade scripts detected. Adding to upgrade path.")
+                upgrade_path += ",/mnt/custom-upgrade-scripts"
+                custom_scripts_volume = "      - ./output/custom_upgrade_scripts:/mnt/custom-upgrade-scripts\n"
 
         if self.extra_addons:
             # Force cache invalidation so COPY instructions run every time
-            with open(os.path.join(self.custom_addons_dir, ".build_timestamp"), "w") as f:
+            with open(
+                os.path.join(self.custom_addons_dir, ".build_timestamp"), "w"
+            ) as f:
                 f.write(str(time.time()))
 
             # Optimized Layering: Copy reqs first, then pip, then code
@@ -467,14 +656,16 @@ COPY --chown=odoo:odoo ./output/custom_addons/ /mnt/custom-addons/
 """
 
             if is_final_step:
-                logger.info("Target version reached. Injecting custom addons path and modules.")
+                logger.info(
+                    "Target version reached. Injecting custom addons path and modules."
+                )
                 extra_addons_path_arg = ",/mnt/custom-addons"
                 custom_modules_load = self._get_custom_module_names()
             else:
                 logger.info("Intermediate version. Skipping custom addons loading.")
 
         dockerfile_content = f"""
-FROM odoo:{target_version}
+FROM --platform=linux/amd64 odoo:{target_version}
 USER root
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/OCA/OpenUpgrade.git --depth 1 --branch {target_version} /mnt/extra-addons
@@ -484,7 +675,7 @@ RUN pip3 install --no-cache-dir -r /mnt/extra-addons/requirements.txt
 
 USER odoo
 """
-        with open("Dockerfile", "w", newline='\n') as f:
+        with open("Dockerfile", "w", newline="\n") as f:
             f.write(dockerfile_content.strip())
 
         compose_content = f"""
@@ -504,11 +695,11 @@ services:
     volumes:
       - ./output/filestore:/var/lib/odoo/filestore/database
       - ./output:/var/log/odoo
-    restart: "no"
+{custom_scripts_volume}    restart: "no"
     entrypoint: /entrypoint.sh
     command: >
       odoo -d database
-      --upgrade-path=/mnt/extra-addons/openupgrade_scripts/scripts
+      --upgrade-path={upgrade_path}
       --addons-path=/mnt/extra-addons{extra_addons_path_arg}
       --update all
       --stop-after-init
@@ -520,20 +711,30 @@ networks:
     external: true
     name: odooupgrade-connection
 """
-        with open("odoo-upgrade-composer.yml", "w", newline='\n') as f:
+        with open("odoo-upgrade-composer.yml", "w", newline="\n") as f:
             f.write(compose_content.strip())
 
-        self._run_cmd(["docker", "rm", "-f", "odoo-openupgrade"], check=False, capture_output=True)
+        self._run_cmd(
+            ["docker", "rm", "-f", "odoo-openupgrade"], check=False, capture_output=True
+        )
 
-        cmd_up = self.compose_cmd + ["-f", "odoo-upgrade-composer.yml", "up", "--build", "--abort-on-container-exit"]
+        cmd_up = self.compose_cmd + [
+            "-f",
+            "odoo-upgrade-composer.yml",
+            "up",
+            "--build",
+            "--abort-on-container-exit",
+        ]
 
         with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                TimeElapsedColumn(),
-                console=console
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TimeElapsedColumn(),
+            console=console,
         ) as progress:
-            task = progress.add_task(f"[bold magenta]Upgrading to {target_version}...", total=None)
+            task = progress.add_task(
+                f"[bold magenta]Upgrading to {target_version}...", total=None
+            )
 
             try:
                 process = subprocess.Popen(
@@ -542,12 +743,12 @@ networks:
                     stderr=subprocess.PIPE,
                     text=True,
                     bufsize=1,
-                    universal_newlines=True
+                    universal_newlines=True,
                 )
 
                 while True:
                     output = process.stdout.readline()
-                    if output == '' and process.poll() is not None:
+                    if output == "" and process.poll() is not None:
                         break
                     if output:
                         line = output.strip()
@@ -572,17 +773,29 @@ networks:
                 return False
 
         try:
-            res = self._run_cmd(["docker", "inspect", "odoo-openupgrade", "--format={{.State.ExitCode}}"],
-                                capture_output=True)
+            res = self._run_cmd(
+                [
+                    "docker",
+                    "inspect",
+                    "odoo-openupgrade",
+                    "--format={{.State.ExitCode}}",
+                ],
+                capture_output=True,
+            )
             exit_code = int(res.stdout.strip())
             logger.info(f"Container exit code: {exit_code}")
 
             if exit_code == 0:
                 console.print(f"[green]Upgrade to {target_version} successful.[/green]")
-                self._run_cmd(self.compose_cmd + ["-f", "odoo-upgrade-composer.yml", "down"], check=False)
+                self._run_cmd(
+                    self.compose_cmd + ["-f", "odoo-upgrade-composer.yml", "down"],
+                    check=False,
+                )
                 return True
             else:
-                console.print(f"[bold red]Container exited with code {exit_code}[/bold red]")
+                console.print(
+                    f"[bold red]Container exited with code {exit_code}[/bold red]"
+                )
                 return False
         except Exception as e:
             logger.error(f"Error checking exit code: {e}")
@@ -593,7 +806,15 @@ networks:
         console.print("[blue]Creating final package...[/blue]")
         logger.info("Creating final package...")
 
-        dump_cmd = ["docker", "exec", "db-odooupgrade", "pg_dump", "-U", "odoo", "database"]
+        dump_cmd = [
+            "docker",
+            "exec",
+            "db-odooupgrade",
+            "pg_dump",
+            "-U",
+            "odoo",
+            "database",
+        ]
         try:
             with open(os.path.join(self.output_dir, "dump.sql"), "w") as f:
                 subprocess.run(dump_cmd, stdout=f, check=True)
@@ -602,7 +823,7 @@ networks:
             raise
 
         zip_name = os.path.join(self.output_dir, "upgraded.zip")
-        with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
             zipf.write(os.path.join(self.output_dir, "dump.sql"), "dump.sql")
 
             if os.path.exists(self.filestore_dir):
@@ -612,7 +833,9 @@ networks:
                         arcname = os.path.relpath(file_path, self.output_dir)
                         zipf.write(file_path, arcname)
 
-        console.print(f"[bold green]Upgrade Complete! Package available at: {zip_name}[/bold green]")
+        console.print(
+            f"[bold green]Upgrade Complete! Package available at: {zip_name}[/bold green]"
+        )
         logger.info(f"Upgrade Complete. Package: {zip_name}")
         os.remove(os.path.join(self.output_dir, "dump.sql"))
 
@@ -622,13 +845,16 @@ networks:
         self._cleanup_dir(self.source_dir)
         self._cleanup_dir(self.filestore_dir)
         self._cleanup_dir(self.custom_addons_dir)
+        self._cleanup_dir(self.custom_upgrade_scripts_dir)
 
     def cleanup(self):
         """Docker cleanup."""
         console.print("[dim]Cleaning up Docker environment...[/dim]")
         logger.info("Cleaning up Docker environment...")
         if os.path.exists("db-composer.yml"):
-            self._run_cmd(self.compose_cmd + ["-f", "db-composer.yml", "down", "-v"], check=False)
+            self._run_cmd(
+                self.compose_cmd + ["-f", "db-composer.yml", "down", "-v"], check=False
+            )
 
         for f in ["Dockerfile", "odoo-upgrade-composer.yml", "db-composer.yml"]:
             if os.path.exists(f):
@@ -638,12 +864,15 @@ networks:
         try:
             logger.info("Starting OdooUpgrader...")
             if self.target_version not in self.VALID_VERSIONS:
-                console.print(f"[bold red]Invalid version. Supported: {self.VALID_VERSIONS}[/bold red]")
+                console.print(
+                    f"[bold red]Invalid version. Supported: {self.VALID_VERSIONS}[/bold red]"
+                )
                 sys.exit(1)
 
             self.validate_source_accessibility()
             self.prepare_environment()
             self.process_extra_addons()
+            self.process_upgrade_scripts()
 
             self.create_db_compose_file()
 
@@ -660,11 +889,15 @@ networks:
 
             current_ver_str = self.get_current_version()
             if not current_ver_str:
-                console.print("[bold red]Could not determine database version.[/bold red]")
+                console.print(
+                    "[bold red]Could not determine database version.[/bold red]"
+                )
                 logger.error("Could not determine database version")
                 sys.exit(1)
 
-            console.print(f"[bold blue]Current Database Version: {current_ver_str}[/bold blue]")
+            console.print(
+                f"[bold blue]Current Database Version: {current_ver_str}[/bold blue]"
+            )
             logger.info(f"Current Database Version: {current_ver_str}")
 
             current_ver = self.get_version_info(current_ver_str)
@@ -672,7 +905,9 @@ networks:
             min_ver = self.get_version_info("10.0")
 
             if current_ver < min_ver:
-                console.print("[bold red]Source database version is below 10.0. Not supported.[/bold red]")
+                console.print(
+                    "[bold red]Source database version is below 10.0. Not supported.[/bold red]"
+                )
                 sys.exit(1)
 
             while True:
@@ -684,7 +919,9 @@ networks:
                     self.cleanup_artifacts()
                     break
                 elif current_ver.major > target_ver.major:
-                    console.print("[yellow]Current version is already higher than target.[/yellow]")
+                    console.print(
+                        "[yellow]Current version is already higher than target.[/yellow]"
+                    )
                     self.finalize_package()
                     self.cleanup_artifacts()
                     break
@@ -696,7 +933,9 @@ networks:
                         sys.exit(1)
 
                     current_ver_str = self.get_current_version()
-                    console.print(f"[blue]Database is now at version: {current_ver_str}[/blue]")
+                    console.print(
+                        f"[blue]Database is now at version: {current_ver_str}[/blue]"
+                    )
 
         except KeyboardInterrupt:
             console.print("[bold red]Operation cancelled by user.[/bold red]")

@@ -30,6 +30,12 @@ logging.basicConfig(
     help="Custom addons location: can be a local folder, a local .zip file, or a URL to a .zip file."
 )
 @click.option(
+    "--upgrade-scripts",
+    required=False,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    help="Path to local folder containing custom upgrade scripts."
+)
+@click.option(
     "--verbose",
     is_flag=True,
     help="Enable verbose logging"
@@ -44,7 +50,7 @@ logging.basicConfig(
     type=click.Path(),
     help="Path to log file"
 )
-def main(source, version, extra_addons, verbose, postgres_version, log_file):
+def main(source, version, extra_addons, upgrade_scripts, verbose, postgres_version, log_file):
     """
     Odoo Database Upgrade Tool.
 
@@ -64,6 +70,7 @@ def main(source, version, extra_addons, verbose, postgres_version, log_file):
         source=source,
         target_version=version,
         extra_addons=extra_addons,
+        upgrade_scripts=upgrade_scripts,
         verbose=verbose,
         postgres_version=postgres_version
     )
